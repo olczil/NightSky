@@ -1,14 +1,10 @@
 import * as THREE from 'three';
-
-import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
-
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-
 import vertexShader from '/assets/shaders/v_shader.glsl';
 import fragmentShader from '/assets/shaders/f_shader.glsl';
 
@@ -19,9 +15,9 @@ bloomLayer.set( BLOOM_SCENE );
 
 const params = {
   threshold: 0,
-  strength: 3,
-  radius: 0.5,
-  exposure: 1
+  strength: 0.3,
+  radius: 0.2,
+  exposure: 0.8
 };
 
 const darkMaterial = new THREE.MeshBasicMaterial( { color: 'black' } );
@@ -34,8 +30,8 @@ document.body.appendChild( renderer.domElement );
 
 const scene = new THREE.Scene();
 
-const camera = new THREE.PerspectiveCamera( 40, window.innerWidth / window.innerHeight, 1, 200 );
-camera.position.set( 0, 0, 20 );
+const camera = new THREE.PerspectiveCamera( 60, window.innerWidth / window.innerHeight, 45, 1000 );
+camera.position.set( 0, 0, 100 );
 camera.lookAt( 0, 0, 0 );
 
 const controls = new OrbitControls( camera, renderer.domElement );
@@ -78,45 +74,10 @@ finalComposer.addPass( renderScene );
 finalComposer.addPass( mixPass );
 finalComposer.addPass( outputPass );
 
-const raycaster = new THREE.Raycaster();
 
 const mouse = new THREE.Vector2();
 
 window.addEventListener( 'pointerdown', onPointerDown );
-
-const gui = new GUI();
-
-const bloomFolder = gui.addFolder( 'bloom' );
-
-bloomFolder.add( params, 'threshold', 0.0, 1.0 ).onChange( function ( value ) {
-
-  bloomPass.threshold = Number( value );
-  render();
-
-} );
-
-bloomFolder.add( params, 'strength', 0.0, 10.0 ).onChange( function ( value ) {
-
-  bloomPass.strength = Number( value );
-  render();
-
-} );
-
-bloomFolder.add( params, 'radius', 0.0, 1.0 ).step( 0.01 ).onChange( function ( value ) {
-
-  bloomPass.radius = Number( value );
-  render();
-
-} );
-
-const toneMappingFolder = gui.addFolder( 'tone mapping' );
-
-toneMappingFolder.add( params, 'exposure', 0.1, 2 ).onChange( function ( value ) {
-
-  outputPass.toneMappingExposure = Math.pow( value, 4.0 );
-  render();
-
-} );
 
 setupScene();
 
@@ -124,16 +85,6 @@ function onPointerDown( event ) {
 
   mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1;
   mouse.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
-
-  raycaster.setFromCamera( mouse, camera );
-  const intersects = raycaster.intersectObjects( scene.children, false );
-  if ( intersects.length > 0 ) {
-
-    const object = intersects[ 0 ].object;
-    object.layers.toggle( BLOOM_SCENE );
-    render();
-
-  }
 
 }
 
@@ -159,27 +110,63 @@ function setupScene() {
   scene.traverse( disposeMaterial );
   scene.children.length = 0;
 
-  const geometry = new THREE.IcosahedronGeometry( 1, 15 );
 
-  for ( let i = 0; i < 50; i ++ ) {
+  // Star textures
+  const starAOTexture = new THREE.TextureLoader().load( 'public/starAO.png' );
+  starAOTexture.colorSpace = THREE.SRGBColorSpace;
 
-    const color = new THREE.Color();
-    color.setHSL( Math.random(), 0.7, Math.random() * 0.2 + 0.05 );
+  const starAlphaTexture = new THREE.TextureLoader().load( 'public/starAlpha.png' );
+  starAlphaTexture.colorSpace = THREE.SRGBColorSpace;
+  
 
-    const material = new THREE.MeshBasicMaterial( { color: color } );
-    const sphere = new THREE.Mesh( geometry, material );
-    sphere.position.x = Math.random() * 10 - 5;
-    sphere.position.y = Math.random() * 10 - 5;
-    sphere.position.z = Math.random() * 10 - 5;
-    sphere.position.normalize().multiplyScalar( Math.random() * 4.0 + 2.0 );
-    sphere.scale.setScalar( Math.random() * Math.random() + 0.5 );
-    scene.add( sphere );
+  // Procyon
+  const procyonGeometry = new THREE.SphereGeometry( 2, 32, 16 ); 
+  const procyonMaterial = new THREE.MeshBasicMaterial({ color: 0xfffffb, alphaMap: starAlphaTexture, aoMap: starAOTexture });
+  const procyon = new THREE.Mesh(procyonGeometry, procyonMaterial);
 
-    if ( Math.random() < 0.25 ) sphere.layers.enable( BLOOM_SCENE );
+  procyon.position.x = -20;
+  procyon.position.y = -10;
+  procyon.position.z = 0;
 
-  }
+  scene.add(procyon);
 
-  render();
+  procyon.layers.enable(BLOOM_SCENE);
+
+  // Gomeisa
+  const gomeisaGeometry = new THREE.SphereGeometry( 4, 32, 16 ); 
+  const gomeisaMaterial = new THREE.MeshBasicMaterial({ color: 0xC1D5FF, alphaMap: starAlphaTexture, aoMap: starAOTexture });
+  const gomeisa = new THREE.Mesh(gomeisaGeometry, gomeisaMaterial);
+  
+  gomeisa.position.x = 20;
+  gomeisa.position.y = 10;
+  gomeisa.position.z = 0;
+
+  scene.add(gomeisa);
+
+  gomeisa.layers.enable(BLOOM_SCENE);
+
+  let materialArray = [];
+  let texture_ft = new THREE.TextureLoader().load( 'public/skybox/space_ft.png');
+  let texture_bk = new THREE.TextureLoader().load( 'public/skybox/space_bk.png');
+  let texture_up = new THREE.TextureLoader().load( 'public/skybox/space_up.png');
+  let texture_dn = new THREE.TextureLoader().load( 'public/skybox/space_dn.png');
+  let texture_rt = new THREE.TextureLoader().load( 'public/skybox/space_rt.png');
+  let texture_lf = new THREE.TextureLoader().load( 'public/skybox/space_lf.png');
+    
+  materialArray.push(new THREE.MeshBasicMaterial( { map: texture_ft }));
+  materialArray.push(new THREE.MeshBasicMaterial( { map: texture_bk }));
+  materialArray.push(new THREE.MeshBasicMaterial( { map: texture_up }));
+  materialArray.push(new THREE.MeshBasicMaterial( { map: texture_dn }));
+  materialArray.push(new THREE.MeshBasicMaterial( { map: texture_rt }));
+  materialArray.push(new THREE.MeshBasicMaterial( { map: texture_lf }));
+
+  for (let i = 0; i < 6; i++)
+     materialArray[i].side = THREE.BackSide;
+  let skyboxGeo = new THREE.BoxGeometry( 1000, 1000, 1000);
+  let skybox = new THREE.Mesh( skyboxGeo, materialArray );
+  scene.add( skybox );  
+
+  animate();
 
 }
 
@@ -191,6 +178,13 @@ function disposeMaterial( obj ) {
 
   }
 
+}
+
+function animate() {
+  skybox.rotation.x += 0.005;
+  skybox.rotation.y += 0.005;
+  renderer.render(scene, camera);
+  requestAnimationFrame(animate);
 }
 
 function render() {
