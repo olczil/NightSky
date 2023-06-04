@@ -12,7 +12,7 @@ document.body.appendChild( renderer.domElement );
 
 const scene = new THREE.Scene();
 
-const camera = new THREE.PerspectiveCamera( 60, window.innerWidth / window.innerHeight, 45, 1000 );
+const camera = new THREE.PerspectiveCamera( 60, window.innerWidth / window.innerHeight, 35, 1000 );
 camera.position.set( 0, 0, 80 );
 camera.lookAt( 0, 0, 0 );
 
@@ -71,8 +71,8 @@ function setupScene() {
   const procyonMaterial = new THREE.MeshBasicMaterial({ color: 0xfffffb, alphaMap: starAlphaTexture, aoMap: starAOTexture });
   const procyon = new THREE.Mesh(procyonGeometry, procyonMaterial);
 
-  procyon.position.x = -20;
-  procyon.position.y = -10;
+  procyon.position.x = -50;
+  procyon.position.y = -30;
   procyon.position.z = 0;
 
   scene.add(procyon);
@@ -82,8 +82,8 @@ function setupScene() {
   const gomeisaMaterial = new THREE.MeshBasicMaterial({ color: 0xC1D5FF, alphaMap: starAlphaTexture, aoMap: starAOTexture });
   const gomeisa = new THREE.Mesh(gomeisaGeometry, gomeisaMaterial);
   
-  gomeisa.position.x = 20;
-  gomeisa.position.y = 10;
+  gomeisa.position.x = 50;
+  gomeisa.position.y = 30;
   gomeisa.position.z = 0;
 
   scene.add(gomeisa);
