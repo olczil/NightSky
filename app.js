@@ -1,119 +1,176 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
-import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { FontLoader } from 'three/addons/loaders/FontLoader.js';
+import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
 
+let container;
 
-const renderer = new THREE.WebGLRenderer( { antialias: true } );
-renderer.setPixelRatio( window.devicePixelRatio );
-renderer.setSize( window.innerWidth, window.innerHeight );
-document.body.appendChild( renderer.domElement );
+let camera, scene, renderer;
 
-const scene = new THREE.Scene();
+let pointLight;
 
-const camera = new THREE.PerspectiveCamera( 60, window.innerWidth / window.innerHeight, 35, 1000 );
-camera.position.set( 0, 0, 80 );
-camera.lookAt( 0, 0, 0 );
+// Star textures
+const starAOTexture = new THREE.TextureLoader().load( 'public/starAO.png' );
+starAOTexture.colorSpace = THREE.SRGBColorSpace;
 
-const renderScene = new RenderPass(scene, camera);
-const composer = new EffectComposer(renderer);
-composer.addPass(renderScene);
+const starAlphaTexture = new THREE.TextureLoader().load( 'public/starAlpha.png' );
+starAlphaTexture.colorSpace = THREE.SRGBColorSpace;
 
-const bloomPass = new UnrealBloomPass(
-  new THREE.Vector2(window.innerWidth, window. innerHeight),
-  1.6,
-  0.1,
-  0.1
+// Procyon
+const procyonGeometry = new THREE.SphereGeometry( 4, 32, 16 ); 
+const procyonMaterial = new THREE.MeshBasicMaterial({ color: 0xfffffb, alphaMap: starAlphaTexture, aoMap: starAOTexture });
+const procyon = new THREE.Mesh(procyonGeometry, procyonMaterial);
+procyon.position.set(-50, -30, 0);
+
+// Gomeisa
+const gomeisaGeometry = new THREE.SphereGeometry( 8, 32, 16 ); 
+const gomeisaMaterial = new THREE.MeshBasicMaterial({ color: 0xC1D5FF, alphaMap: starAlphaTexture, aoMap: starAOTexture });
+const gomeisa = new THREE.Mesh(gomeisaGeometry, gomeisaMaterial);
+gomeisa.position.set(50, 30, 0);
+
+// Text etc
+const fontLoader = new FontLoader();
+fontLoader.load(
+  'public/space-mono-regular.json',
+  (monospace) => {
+    const textGeometry = new TextGeometry('Canis minor', {
+      size: 20,
+      height: 1,
+      font: monospace,
+    });
+    const textMaterial = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      emissive: 'white',
+      emissiveIntensity: 0.3,
+      transparent: true,
+      opacity: 0.2,
+      side: THREE.DoubleSide,
+      envMap: 'reflection',
+      depthTest: false
+
+    });
+    const textMesh = new THREE.Mesh(textGeometry, textMaterial);
+    textMesh.position.set(-80, 0, -300);
+    scene.add(textMesh);
+
+    const gomeisaTextGeometry = new TextGeometry('Gomeisa', {
+      size: 4,
+      height: 0.1,
+      font: monospace,
+    });
+    const gomeisaTextMaterial = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      emissive: 'slateblue',
+      emissiveIntensity: 1,
+      side: THREE.DoubleSide,
+      envMap: 'reflection',
+      depthTest: false
+
+    });
+    const gomeisaTextMesh = new THREE.Mesh(gomeisaTextGeometry, gomeisaTextMaterial);
+    gomeisaTextMesh.position.set(10, 30, -5);
+
+    scene.add(gomeisaTextMesh);
+
+    const procyonTextGeometry = new TextGeometry('Procyon', {
+      size: 4,
+      height: 0.1,
+      font: monospace,
+    });
+    const procyonTextMaterial = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      emissive: 'slateblue',
+      emissiveIntensity: 1,
+      side: THREE.DoubleSide,
+      envMap: 'reflection',
+      depthTest: false
+
+    });
+    const procyonTextMesh = new THREE.Mesh(procyonTextGeometry, procyonTextMaterial);
+    procyonTextMesh.position.set(-40, -33, -5);
+
+    scene.add(procyonTextMesh);
+  }
 );
 
-composer.addPass(bloomPass);
+init();
+animate();
 
+function init() {
 
-const controls = new OrbitControls( camera, renderer.domElement );
-controls.maxPolarAngle = Math.PI * 0.5;
-controls.minDistance = 1;
-controls.maxDistance = 100;
-controls.enableZoom = false;
+  container = document.createElement( 'div' );
+  document.body.appendChild( container );
 
+  camera = new THREE.PerspectiveCamera( 60, window.innerWidth / window.innerHeight, 1, 5000 );
+  camera.position.z = 100;
 
+  //cubemap
+  const path = 'public/skybox/';
+  const format = '.png';
+  const urls = [
+    path + 'right' + format, path + 'left' + format,
+    path + 'top' + format, path + 'bottom' + format,
+    path + 'front' + format, path + 'back' + format
+  ];
 
-scene.add( new THREE.AmbientLight( 0x898989 ) );
+  const reflectionCube = new THREE.CubeTextureLoader().load( urls );
+  const refractionCube = new THREE.CubeTextureLoader().load( urls );
+  refractionCube.mapping = THREE.CubeRefractionMapping;
 
-setupScene();
+  scene = new THREE.Scene();
+  scene.background = reflectionCube;
 
-window.onresize = function () {
+  //lights
+  const ambient = new THREE.AmbientLight( 0xffffff, 20 );
+  scene.add( ambient );
 
-  const width = window.innerWidth;
-  const height = window.innerHeight;
+  pointLight = new THREE.PointLight( 0xffffff, 2 );
+  scene.add( pointLight );
 
-  camera.aspect = width / height;
-  camera.updateProjectionMatrix();
-
-  renderer.setSize( width, height );
-
-  render();
-
-};
-
-function setupScene() {
-
-  // Star textures
-  const starAOTexture = new THREE.TextureLoader().load( 'public/starAO.png' );
-  starAOTexture.colorSpace = THREE.SRGBColorSpace;
-
-  const starAlphaTexture = new THREE.TextureLoader().load( 'public/starAlpha.png' );
-  starAlphaTexture.colorSpace = THREE.SRGBColorSpace;
-  
-
-  // Procyon
-  const procyonGeometry = new THREE.SphereGeometry( 2, 32, 16 ); 
-  const procyonMaterial = new THREE.MeshBasicMaterial({ color: 0xfffffb, alphaMap: starAlphaTexture, aoMap: starAOTexture });
-  const procyon = new THREE.Mesh(procyonGeometry, procyonMaterial);
-
-  procyon.position.x = -50;
-  procyon.position.y = -30;
-  procyon.position.z = 0;
-
+  //planets
+  scene.add(gomeisa);
   scene.add(procyon);
 
-  // Gomeisa
-  const gomeisaGeometry = new THREE.SphereGeometry( 4, 32, 16 ); 
-  const gomeisaMaterial = new THREE.MeshBasicMaterial({ color: 0xC1D5FF, alphaMap: starAlphaTexture, aoMap: starAOTexture });
-  const gomeisa = new THREE.Mesh(gomeisaGeometry, gomeisaMaterial);
-  
-  gomeisa.position.x = 50;
-  gomeisa.position.y = 30;
-  gomeisa.position.z = 0;
+  //materials
+  const cubeMaterial3 = new THREE.MeshLambertMaterial( { color: 0xffaa00, envMap: reflectionCube, combine: THREE.MixOperation, reflectivity: 0.3 } );
+  const cubeMaterial2 = new THREE.MeshLambertMaterial( { color: 0xfff700, envMap: refractionCube, refractionRatio: 0.95 } );
+  const cubeMaterial1 = new THREE.MeshLambertMaterial( { color: 0xffffff, envMap: reflectionCube } );
 
-  scene.add(gomeisa);
+  //renderer
+  renderer = new THREE.WebGLRenderer();
+  renderer.setPixelRatio( window.devicePixelRatio );
+  renderer.setSize( window.innerWidth, window.innerHeight );
+  container.appendChild( renderer.domElement );
 
-  let materialArray = [];
-  let texture_ft = new THREE.TextureLoader().load( 'public/skybox/space_ft.png');
-  let texture_bk = new THREE.TextureLoader().load( 'public/skybox/space_bk.png');
-  let texture_up = new THREE.TextureLoader().load( 'public/skybox/space_up.png');
-  let texture_dn = new THREE.TextureLoader().load( 'public/skybox/space_dn.png');
-  let texture_rt = new THREE.TextureLoader().load( 'public/skybox/space_rt.png');
-  let texture_lf = new THREE.TextureLoader().load( 'public/skybox/space_lf.png');
-    
-  materialArray.push(new THREE.MeshBasicMaterial( { map: texture_ft }));
-  materialArray.push(new THREE.MeshBasicMaterial( { map: texture_bk }));
-  materialArray.push(new THREE.MeshBasicMaterial( { map: texture_up }));
-  materialArray.push(new THREE.MeshBasicMaterial( { map: texture_dn }));
-  materialArray.push(new THREE.MeshBasicMaterial( { map: texture_rt }));
-  materialArray.push(new THREE.MeshBasicMaterial( { map: texture_lf }));
+  //controls
+  const controls = new OrbitControls( camera, renderer.domElement );
+  controls.enableZoom = false;
+  controls.enablePan = false;
+  controls.minPolarAngle = Math.PI / 4;
+  controls.maxPolarAngle = Math.PI / 1.5;
 
-  for (let i = 0; i < 6; i++)
-     materialArray[i].side = THREE.BackSide;
-  let skyboxGeo = new THREE.BoxGeometry( 1000, 1000, 1000);
-  let skybox = new THREE.Mesh( skyboxGeo, materialArray );
-  scene.add( skybox );  
+  window.addEventListener( 'resize', onWindowResize );
+
+}
+
+function onWindowResize() {
+
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+
+  renderer.setSize( window.innerWidth, window.innerHeight );
+
 }
 
 function animate() {
-  // renderer.render(scene, camera);
-  composer.render();
-  requestAnimationFrame(animate);
-}
-animate();
 
+  requestAnimationFrame( animate );
+  render();
+
+}
+
+function render() {
+
+  renderer.render( scene, camera );
+
+}
