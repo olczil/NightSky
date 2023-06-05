@@ -33,12 +33,12 @@ const fontLoader = new FontLoader();
 fontLoader.load(
   'public/space-mono-regular.json',
   (monospace) => {
-    const textGeometry = new TextGeometry('Canis minor', {
+    const canisMinorGeometry = new TextGeometry('Canis minor', {
       size: 20,
       height: 1,
       font: monospace,
     });
-    const textMaterial = new THREE.MeshStandardMaterial({
+    const canisMinorMaterial = new THREE.MeshStandardMaterial({
       color: 0xffffff,
       emissive: 'white',
       emissiveIntensity: 0.3,
@@ -49,9 +49,9 @@ fontLoader.load(
       depthTest: false
 
     });
-    const textMesh = new THREE.Mesh(textGeometry, textMaterial);
-    textMesh.position.set(-80, 0, -300);
-    scene.add(textMesh);
+    const canisMinorMesh = new THREE.Mesh(canisMinorGeometry, canisMinorMaterial);
+    canisMinorMesh.position.set(-80, 0, -300);
+    scene.add(canisMinorMesh);
 
     const gomeisaTextGeometry = new TextGeometry('Gomeisa', {
       size: 4,
