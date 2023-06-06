@@ -2,12 +2,18 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { FontLoader } from 'three/addons/loaders/FontLoader.js';
 import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
+import { FlyControls } from 'three/addons/controls/FlyControls.js';
+
 
 let container;
-
-let camera, scene, renderer;
-
+let camera, scene, renderer, controls;
 let pointLight;
+
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+
+const clock = new THREE.Clock();
+
 
 // Star textures
 const starAOTexture = new THREE.TextureLoader().load( 'public/starAO.png' );
@@ -17,16 +23,16 @@ const starAlphaTexture = new THREE.TextureLoader().load( 'public/starAlpha.png' 
 starAlphaTexture.colorSpace = THREE.SRGBColorSpace;
 
 // Procyon
-const procyonGeometry = new THREE.SphereGeometry( 4, 32, 16 ); 
+const procyonGeometry = new THREE.SphereGeometry( 8, 32, 16 ); 
 const procyonMaterial = new THREE.MeshBasicMaterial({ color: 0xfffffb, alphaMap: starAlphaTexture, aoMap: starAOTexture });
 const procyon = new THREE.Mesh(procyonGeometry, procyonMaterial);
-procyon.position.set(-50, -30, 0);
+procyon.position.set(-105, -60, 0);
 
 // Gomeisa
-const gomeisaGeometry = new THREE.SphereGeometry( 8, 32, 16 ); 
+const gomeisaGeometry = new THREE.SphereGeometry( 16, 32, 16 ); 
 const gomeisaMaterial = new THREE.MeshBasicMaterial({ color: 0xC1D5FF, alphaMap: starAlphaTexture, aoMap: starAOTexture });
 const gomeisa = new THREE.Mesh(gomeisaGeometry, gomeisaMaterial);
-gomeisa.position.set(50, 30, 0);
+gomeisa.position.set(105, 60, 0);
 
 // Text etc
 const fontLoader = new FontLoader();
@@ -50,11 +56,21 @@ fontLoader.load(
 
     });
     const canisMinorMesh = new THREE.Mesh(canisMinorGeometry, canisMinorMaterial);
-    canisMinorMesh.position.set(-80, 0, -300);
+    canisMinorMesh.position.set(-80, 40, -300);
     scene.add(canisMinorMesh);
 
+    const canisMinorSubtitleGeometry = new TextGeometry('71. co do wielkości gwiazdozbiór usytuowany\n w pobliżu równika niebieskiego. Jest jednym \n z 48 pierwotnych greckich gwiazdozbiorów.', {
+      size: 10,
+      height: 1,
+      font: monospace,
+    });
+
+    const canisMinorSubtitleMesh = new THREE.Mesh(canisMinorSubtitleGeometry, canisMinorMaterial);
+    canisMinorSubtitleMesh.position.set(-170, 0, -300);
+    scene.add(canisMinorSubtitleMesh);
+
     const gomeisaTextGeometry = new TextGeometry('Gomeisa', {
-      size: 4,
+      size: 6,
       height: 0.1,
       font: monospace,
     });
@@ -68,16 +84,37 @@ fontLoader.load(
 
     });
     const gomeisaTextMesh = new THREE.Mesh(gomeisaTextGeometry, gomeisaTextMaterial);
-    gomeisaTextMesh.position.set(10, 30, -5);
+    gomeisaTextMesh.position.set(12, 66, -10);
 
     scene.add(gomeisaTextMesh);
 
     const procyonTextGeometry = new TextGeometry('Procyon', {
-      size: 4,
+      size: 6,
       height: 0.1,
       font: monospace,
     });
+
     const procyonTextMaterial = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      emissive: 'slateblue',
+      emissiveIntensity: 1,
+      side: THREE.DoubleSide,
+      envMap: 'reflection',
+      depthTest: false
+      
+    });
+
+    const procyonTextMesh = new THREE.Mesh(procyonTextGeometry, procyonTextMaterial);
+    procyonTextMesh.position.set(-90, -58, -10);
+
+    scene.add(procyonTextMesh);
+
+    const gomeisaDetailsGeometry = new TextGeometry('Druga pod względem jasności gwiazda\nw gwiazdozbiorze Małego Psa, znajdująca się\nw odległości ok. 162 lat świetlnych od Słońca.', {
+      size: 1.8,
+      height: 0.1,
+      font: monospace,
+    });
+    const detailsMaterial = new THREE.MeshStandardMaterial({
       color: 0xffffff,
       emissive: 'slateblue',
       emissiveIntensity: 1,
@@ -86,10 +123,21 @@ fontLoader.load(
       depthTest: false
 
     });
-    const procyonTextMesh = new THREE.Mesh(procyonTextGeometry, procyonTextMaterial);
-    procyonTextMesh.position.set(-40, -33, -5);
+    const gomeisaDetailsMesh = new THREE.Mesh(gomeisaDetailsGeometry, detailsMaterial);
+    gomeisaDetailsMesh.position.set(12, 59, -10);
 
-    scene.add(procyonTextMesh);
+    scene.add(gomeisaDetailsMesh);
+
+    const procyonDetailsGeometry = new TextGeometry('Najjaśniejsza gwiazda w gwiazdozbiorze Małego Psa,\nósma co do jasności gwiazda nocnego nieba. Znajduje się\nw odległości około 11,5 roku świetlnego od Słońca.', {
+      size: 1.8,
+      height: 0.1,
+      font: monospace,
+    });
+
+    const procyonDetailsMesh = new THREE.Mesh(procyonDetailsGeometry, detailsMaterial);
+    procyonDetailsMesh.position.set(-90, -65, -10);
+
+    scene.add(procyonDetailsMesh);
   }
 );
 
@@ -102,7 +150,7 @@ function init() {
   document.body.appendChild( container );
 
   camera = new THREE.PerspectiveCamera( 60, window.innerWidth / window.innerHeight, 1, 5000 );
-  camera.position.z = 100;
+  camera.position.z = 200;
 
   //cubemap
   const path = 'public/skybox/';
@@ -142,14 +190,12 @@ function init() {
   renderer.setSize( window.innerWidth, window.innerHeight );
   container.appendChild( renderer.domElement );
 
-  //controls
-  const controls = new OrbitControls( camera, renderer.domElement );
-  controls.enableZoom = false;
-  controls.enablePan = false;
-  controls.minPolarAngle = Math.PI / 4;
-  controls.maxPolarAngle = Math.PI / 1.5;
+  controls = new FlyControls( camera, renderer.domElement );
+  controls.movementSpeed = 100;
+  controls.rollSpeed = Math.PI / 50;
 
   window.addEventListener( 'resize', onWindowResize );
+  document.addEventListener( 'pointerdown', onPointerDown );
 
 }
 
@@ -162,6 +208,22 @@ function onWindowResize() {
 
 }
 
+function onPointerDown( event ) {
+
+  pointer.set( ( event.clientX / window.innerWidth ) * 2 - 1, - ( event.clientY / window.innerHeight ) * 2 + 1 );
+  raycaster.setFromCamera( pointer, camera );
+  const intersects = raycaster.intersectObjects( procyon );
+
+  if ( intersects.length > 0 ) {
+
+    procyon.material.color.setHex(0x444444);
+
+  }
+
+  renderer.render();
+
+}
+
 function animate() {
 
   requestAnimationFrame( animate );
@@ -169,8 +231,11 @@ function animate() {
 
 }
 
+
+
 function render() {
 
+  controls.update( clock.getDelta() );
   renderer.render( scene, camera );
 
 }
