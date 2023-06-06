@@ -47,7 +47,7 @@ function init() {
     let material = new THREE.MeshPhysicalMaterial( {
         clearcoat: 0.1,
         clearcoatRoughness: 1,
-        metalness: 0,
+        metalness: 0.1,
         roughness: 1,
         color: 0x49a35d,
         normalMap: hillsMap,
@@ -56,8 +56,8 @@ function init() {
 
     const data = generateHeight( worldWidth, worldDepth );  
 
-    camera.position.set( 0, 800, 0 );
-    camera.lookAt( 0, 830, - 100 );
+    camera.position.set( 0, 500, 0 );
+    camera.lookAt( 0, 530, - 100 );
 
     const geometry = new THREE.PlaneGeometry( 7500, 7500, worldWidth - 1, worldDepth - 1 );
       
@@ -66,7 +66,7 @@ function init() {
     const vertices = geometry.attributes.position.array;
   
     for ( let i = 0, j = 0, l = vertices.length; i < l; i ++, j += 3 ) {
-      vertices[ j + 1 ] = data[ i ] * 10;
+      vertices[ j + 1 ] = data[ i ] * 8;
     }
 
     geometry.computeVertexNormals();
@@ -81,6 +81,9 @@ function init() {
     renderer = new THREE.WebGLRenderer();
     renderer.setPixelRatio( window.devicePixelRatio );
     renderer.setSize( window.innerWidth, window.innerHeight );
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 0.95;
+
     container.appendChild( renderer.domElement );
 
     controls = new FirstPersonControls( camera, renderer.domElement );
@@ -113,7 +116,7 @@ function generateHeight( width, height ) {
 
     };
 
-    const size = width * height, data = new Uint8Array( size );
+    const size = width * height, data = new Uint32Array( size );
     const perlin = new ImprovedNoise(), z = Math.random() * 100;
 
     let quality = 1;
