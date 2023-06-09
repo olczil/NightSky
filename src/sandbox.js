@@ -74,7 +74,7 @@ let camera, controls, scene, renderer;
 let sky, sun;
 let rainMaterial, rainColor, rainSize, rainDensity = 10000;
 const rainVertices = [];
-const starGeometry = new THREE.SphereGeometry(40, 40, 40);
+const starGeometry = new THREE.SphereGeometry(40, 100, 100);
 
 const params = {
     trs: false,
@@ -82,15 +82,6 @@ const params = {
     binary: false,
     maxTextureSize: 4096,
     exportScene: exportScene
-};
-
-let fogParams = {
-    fogNearColor: 0xfc4848,
-    fogHorizonColor: 0xe4dcff,
-    fogDensity: 0.0025,
-    fogNoiseSpeed: 100,
-    fogNoiseFreq: .0012,
-    fogNoiseImpact: .5
 };
 
 const worldWidth = 256, worldDepth = 256;
@@ -122,7 +113,7 @@ animate();
 
 function stars() {
 
-const starMaterial1 = new THREE.MeshStandardMaterial({color: 0xffffff});
+const starMaterial1 = new THREE.MeshStandardMaterial({color: 0xffffff, emissive: 0xffffff, fog:false});
 const star1 = new THREE.Mesh(starGeometry, starMaterial1)
 star1.position.set(4000, 5000, -5600);
 star1.layers.set(2);
@@ -130,7 +121,7 @@ star1.name = "star1";
 
 scene.add(star1);
 
-const starMaterial2 = new THREE.MeshStandardMaterial({color: 0xffffff, emissive: 0xffffff});
+const starMaterial2 = new THREE.MeshStandardMaterial({color: 0xffffff, emissive: 0xffffff, fog:false});
 const star2 = new THREE.Mesh(starGeometry, starMaterial2)
 star2.position.set(900, 4500, -5600);
 star2.layers.set(3);
@@ -138,7 +129,7 @@ star2.name = "star2";
 
 scene.add(star2);
 
-const starMaterial3 = new THREE.MeshStandardMaterial({color: 0xffffff});
+const starMaterial3 = new THREE.MeshStandardMaterial({color: 0xffffff, emissive: 0xffffff, fog:false});
 const star3 = new THREE.Mesh(starGeometry, starMaterial3)
 star3.position.set(2000, 5500, -5600);
 star3.layers.set(4);
@@ -146,7 +137,7 @@ star3.name = "star3";
 
 scene.add(star3);
 
-const starMaterial4 = new THREE.MeshStandardMaterial({color: 0xffffff});
+const starMaterial4 = new THREE.MeshStandardMaterial({color: 0xffffff, emissive: 0xffffff, fog:false});
 const star4 = new THREE.Mesh(starGeometry, starMaterial4)
 star4.position.set(-2900, 5600, -5600);
 star4.layers.set(5);
@@ -154,7 +145,7 @@ star4.name = "star4";
 
 scene.add(star4);
 
-const starMaterial5 = new THREE.MeshStandardMaterial({color: 0xffffff, roughness:1.0});
+const starMaterial5 = new THREE.MeshStandardMaterial({color: 0xffffff, emissive: 0xffffff, roughness:1.0, fog:false});
 const star5 = new THREE.Mesh(starGeometry, starMaterial5)
 star5.position.set(-4000, 4600, -5600);
 star5.layers.set(6);
@@ -162,7 +153,7 @@ star5.name = "star5";
 
 scene.add(star5);
 
-const starMaterial6 = new THREE.MeshStandardMaterial({color: 0xffffff});
+const starMaterial6 = new THREE.MeshStandardMaterial({color: 0xffffff, emissive: 0xffffff, fog:false});
 const star6 = new THREE.Mesh(starGeometry, starMaterial6)
 star6.position.set(-6000, 6000, -5600);
 star6.layers.set(7);
@@ -312,7 +303,7 @@ function init() {
     const shadowLight = new THREE.DirectionalLight(0xFFFFFF, 0.1);
     shadowLight.layers.enable(0);
     shadowLight.position.set(0, 10, 0);
-    shadowLight.target.position.set(-5, 0, 0);
+    shadowLight.target.position.set(-5, 0, -5500);
     shadowLight.castShadow = true;
     shadowLight.name = "shadowLight";
     scene.add(shadowLight);
@@ -338,8 +329,8 @@ function init() {
 
     const data = generateHeight( worldWidth, worldDepth );  
 
-    camera.position.set( 0, 500, 0 );
-    camera.lookAt( 0, 530, - 100 );
+    camera.position.set( 0, 510, 0 );
+    camera.lookAt( 0, 540, - 100 );
 
     const geometry = new THREE.PlaneGeometry( 7500, 7500, worldWidth - 1, worldDepth - 1 );
       
@@ -490,9 +481,5 @@ function render() {
     }
 
     renderer.render( scene, camera );
-
-    if(terrainShader) {
-        terrainShader.uniforms.time.value += deltaTime;
-      }
 
 }
