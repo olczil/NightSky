@@ -11,7 +11,11 @@ let sky, sun;
 
 const worldWidth = 256, worldDepth = 256;
 const clock = new THREE.Clock();
-const materials = [];
+let rainMaterial;
+let rainColor;
+let rainSize;
+let rainDensity = 10000;
+const rainVertices = [];
 
 class FogGUIHelper {
     constructor(fog) {
@@ -40,56 +44,40 @@ animate();
 function initParticles() {
 
     const geometry = new THREE.BufferGeometry();
-    const vertices = [];
-
+    
     const textureLoader = new THREE.TextureLoader();
 
     const assignSRGB = ( texture ) => { texture.colorSpace = THREE.SRGBColorSpace; };
 
-    const sprite1 = textureLoader.load( 'public/snowflake4.png', assignSRGB );
-    const sprite2 = textureLoader.load( 'public/snowflake4.png', assignSRGB );
-    const sprite3 = textureLoader.load( 'public/snowflake4.png', assignSRGB );
-    const sprite4 = textureLoader.load( 'public/snowflake4.png', assignSRGB );
-    const sprite5 = textureLoader.load( 'public/snowflake4.png', assignSRGB );
+    const sprite = textureLoader.load( 'public/snowflake4.png', assignSRGB );
 
-    for ( let i = 0; i < 1000; i ++ ) {
+    for ( let i = 0; i < rainDensity; i ++ ) {
 
         const x = Math.random() * 2000 - 1000;
         const y = Math.random() * 2000 - 1000;
         const z = Math.random() * 2000 - 1000;
 
-        vertices.push( x, y, z );
+        rainVertices.push( x, y, z );
 
     }
 
-    geometry.setAttribute( 'position', new THREE.Float32BufferAttribute( vertices, 3 ) );
+    geometry.setAttribute( 'position', new THREE.Float32BufferAttribute( rainVertices, 3 ) );
 
-    parameters = [
-        [[ 1.0, 0.2, 0.5 ], sprite2, 20 ],
-        [[ 0.95, 0.1, 0.5 ], sprite3, 15 ],
-        [[ 0.90, 0.05, 0.5 ], sprite1, 10 ],
-        [[ 0.85, 0, 0.5 ], sprite5, 8 ],
-        [[ 0.80, 0, 0.5 ], sprite4, 5 ]
-    ];
+    rainColor = [ 1.0, 0.2, 0.5 ];
+    rainSize = 20;
 
-    for ( let i = 0; i < parameters.length; i ++ ) {
+    rainMaterial = new THREE.PointsMaterial( { size: rainSize, map: sprite, blending: THREE.AdditiveBlending, depthTest: true, transparent: true } );
+    rainMaterial.color.setHSL( rainColor[ 0 ], rainColor[ 1 ], rainColor[ 2 ], THREE.SRGBColorSpace );
 
-        const color = parameters[ i ][ 0 ];
-        const sprite = parameters[ i ][ 1 ];
-        const size = parameters[ i ][ 2 ];
+    const particles = new THREE.Points( geometry, rainMaterial );
 
-        materials[ i ] = new THREE.PointsMaterial( { size: size, map: sprite, blending: THREE.AdditiveBlending, depthTest: true, transparent: true } );
-        materials[ i ].color.setHSL( color[ 0 ], color[ 1 ], color[ 2 ], THREE.SRGBColorSpace );
+    particles.rotation.x = Math.random() * 6;
+    particles.rotation.y = Math.random() * 6;
+    particles.rotation.z = Math.random() * 6;
 
-        const particles = new THREE.Points( geometry, materials[ i ] );
+    particles.layers.set(1);
 
-        particles.rotation.x = Math.random() * 6;
-        particles.rotation.y = Math.random() * 6;
-        particles.rotation.z = Math.random() * 6;
-
-        scene.add( particles );
-
-    }
+    scene.add( particles );
 
 }
 
@@ -98,6 +86,7 @@ function initSky() {
     // Add Sky
     sky = new Sky();
     sky.scale.setScalar( 45000 );
+    sky.layers.set(0);
     scene.add( sky );
 
     sun = new THREE.Vector3();
@@ -110,8 +99,7 @@ function initSky() {
         mieDirectionalG: 0.27,
         elevation: 36,
         azimuth: 180,
-        exposure: 0.1,
-
+        exposure: 0.1
     };
 
 
@@ -152,6 +140,9 @@ function initSky() {
     moonFolder.add(effectController, 'elevation', 0, 90, 0.1 ).onChange( guiChanged );
     moonFolder.add(effectController, 'azimuth', -180, 180, 0.1 ).onChange( guiChanged );
 
+    const rainFolder = gui.addFolder("Rain");
+    rainFolder.add({'toggle': function() { camera.layers.toggle(1) }}, 'toggle');
+
     guiChanged();
 
 }
@@ -160,13 +151,17 @@ function init() {
 
     container = document.getElementById( 'container' );
     camera = new THREE.PerspectiveCamera( 60, window.innerWidth / window.innerHeight, 1, 10000 );
+    camera.layers.enable(0);
+    // camera.layers.enable(1);
     scene = new THREE.Scene();
 
     let mainLight = new THREE.HemisphereLight(0xffffff, 0x70a4cc, 0.9);
+    mainLight.layers.enable(0);
     mainLight.position.set(200, -50, -100);
     scene.add(mainLight);
     
     const shadowLight = new THREE.DirectionalLight(0xFFFFFF, 0.1);
+    shadowLight.layers.enable(0);
     shadowLight.position.set(0, 10, 0);
     shadowLight.target.position.set(-5, 0, 0);
     shadowLight.castShadow = true;
@@ -211,6 +206,7 @@ function init() {
     let ground = new THREE.Mesh(geometry, material);
     ground.castShadow = true;
     ground.receiveShadow = true;
+    ground.layers.set(0);
     
     scene.add(ground);
     initParticles();
@@ -322,7 +318,7 @@ function animate() {
 
 function render() {
 
-    requestAnimationFrame( render );
+
   
     controls.update( clock.getDelta() );
 
@@ -341,16 +337,7 @@ function render() {
 
     }
 
-    for ( let i = 0; i < materials.length; i ++ ) {
-
-        const color = parameters[ i ][ 0 ];
-
-        const h = ( 30 * ( color[ 0 ] + time ));
-        materials[ i ].color.setHSL( h, color[ 1 ], color[ 2 ], THREE.SRGBColorSpace );
-    }
-
-
     renderer.render( scene, camera );
 
-
+    requestAnimationFrame( render );
 }
