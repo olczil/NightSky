@@ -84,6 +84,15 @@ const params = {
     exportScene: exportScene
 };
 
+let fogParams = {
+    fogNearColor: 0xfc4848,
+    fogHorizonColor: 0xe4dcff,
+    fogDensity: 0.0025,
+    fogNoiseSpeed: 100,
+    fogNoiseFreq: .0012,
+    fogNoiseImpact: .5
+};
+
 const worldWidth = 256, worldDepth = 256;
 const clock = new THREE.Clock();
 
@@ -121,7 +130,7 @@ star1.name = "star1";
 
 scene.add(star1);
 
-const starMaterial2 = new THREE.MeshStandardMaterial({color: 0xffffff});
+const starMaterial2 = new THREE.MeshStandardMaterial({color: 0xffffff, emissive: 0xffffff});
 const star2 = new THREE.Mesh(starGeometry, starMaterial2)
 star2.position.set(900, 4500, -5600);
 star2.layers.set(3);
@@ -145,7 +154,7 @@ star4.name = "star4";
 
 scene.add(star4);
 
-const starMaterial5 = new THREE.MeshStandardMaterial({color: 0xffffff});
+const starMaterial5 = new THREE.MeshStandardMaterial({color: 0xffffff, roughness:1.0});
 const star5 = new THREE.Mesh(starGeometry, starMaterial5)
 star5.position.set(-4000, 4600, -5600);
 star5.layers.set(6);
@@ -171,7 +180,7 @@ function initParticles() {
 
     const assignSRGB = ( texture ) => { texture.colorSpace = THREE.SRGBColorSpace; };
 
-    const sprite = textureLoader.load( 'public/snowflake4.png', assignSRGB );
+    const sprite = textureLoader.load( 'assets/textures/rainDrop.png', assignSRGB );
 
     for ( let i = 0; i < rainDensity; i ++ ) {
 
@@ -309,7 +318,6 @@ function init() {
     scene.add(shadowLight);
     scene.add(shadowLight.target);
     
-
     const hillsMap = new THREE.CanvasTexture( new generateHillsTexture() );
     hillsMap.wrapS = THREE.RepeatWrapping;
     hillsMap.wrapT = THREE.RepeatWrapping;
@@ -353,7 +361,6 @@ function init() {
     
     scene.add(ground);
     initParticles();
-    stars();
 
     renderer = new THREE.WebGLRenderer();
     renderer.setPixelRatio( window.devicePixelRatio );
@@ -368,6 +375,7 @@ function init() {
     controls.lookSpeed = 0;
 
     initSky();
+    stars();
 
     window.addEventListener( 'resize', onWindowResize );
 
@@ -468,26 +476,23 @@ function animate() {
 
 function render() {
 
-
-  
     controls.update( clock.getDelta() );
 
     const time = Date.now() * 0.00005;
-
 
     for ( let i = 0; i < scene.children.length; i ++ ) {
 
         const object = scene.children[ i ];
 
         if ( object instanceof THREE.Points ) {
-
             object.rotation.x = time * ( i < 4 ? i + 1 : - ( i + 1 ) );
-
         }
-
     }
 
     renderer.render( scene, camera );
 
-    requestAnimationFrame( render );
+    if(terrainShader) {
+        terrainShader.uniforms.time.value += deltaTime;
+      }
+
 }
