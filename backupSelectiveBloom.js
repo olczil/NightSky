@@ -1,332 +1,311 @@
-const BLOOM_SCENE = 1;
-
-const bloomLayer = new THREE.Layers();
-bloomLayer.set( BLOOM_SCENE );
-
-const params = {
-  threshold: 0,
-  strength: 3,
-  radius: 0.5,
-  exposure: 1
-};
-
-const darkMaterial = new THREE.MeshBasicMaterial( { color: 'black' } );
-const materials = {};
-
-const renderScene = new RenderPass( scene, camera );
-
-const bloomPass = new UnrealBloomPass( new THREE.Vector2( window.innerWidth, window.innerHeight ), 1.5, 0.4, 0.85 );
-bloomPass.threshold = params.threshold;
-bloomPass.strength = params.strength;
-bloomPass.radius = params.radius;
-
-const bloomComposer = new EffectComposer( renderer );
-bloomComposer.renderToScreen = false;
-bloomComposer.addPass( renderScene );
-bloomComposer.addPass( bloomPass );
-
-const mixPass = new ShaderPass(
-  new THREE.ShaderMaterial( {
-    uniforms: {
-      baseTexture: { value: null },
-      bloomTexture: { value: bloomComposer.renderTarget2.texture }
-    },
-    vertexShader: document.getElementById( 'vertexshader' ).textContent,
-    fragmentShader: document.getElementById( 'fragmentshader' ).textContent,
-    defines: {}
-  } ), 'baseTexture'
-);
-mixPass.needsSwap = true;
-
-const outputPass = new OutputPass( THREE.ReinhardToneMapping );
-
-const finalComposer = new EffectComposer( renderer );
-finalComposer.addPass( renderScene );
-finalComposer.addPass( mixPass );
-finalComposer.addPass( outputPass );
-
-const raycaster = new THREE.Raycaster();
-
-const mouse = new THREE.Vector2();
-
-window.addEventListener( 'pointerdown', onPointerDown );
-
-//moje init czy cos
-setupScene();
-
-function onPointerDown( event ) {
-
-  mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1;
-  mouse.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
-
-  raycaster.setFromCamera( mouse, camera );
-  const intersects = raycaster.intersectObjects( scene.children, false );
-  if ( intersects.length > 0 ) {
-
-    const object = intersects[ 0 ].object;
-    object.layers.toggle( BLOOM_SCENE );
-    render();
-
-  }
-
-}
-
-window.onresize = function () {
-
-  const width = window.innerWidth;
-  const height = window.innerHeight;
-
-  camera.aspect = width / height;
-  camera.updateProjectionMatrix();
-
-  renderer.setSize( width, height );
-
-  bloomComposer.setSize( width, height );
-  finalComposer.setSize( width, height );
-
-  render();
-
-};
-
-function render() {
-
-  scene.traverse( darkenNonBloomed );
-  bloomComposer.render();
-  scene.traverse( restoreMaterial );
-
-  // render the entire scene, then render bloom scene on top
-  finalComposer.render();
-
-}
-
-function darkenNonBloomed( obj ) {
-
-  if ( obj.isMesh && bloomLayer.test( obj.layers ) === false ) {
-
-    materials[ obj.uuid ] = obj.material;
-    obj.material = darkMaterial;
-
-  }
-
-}
-
-////// backuuuuup
-
 import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { FontLoader } from 'three/addons/loaders/FontLoader.js';
-import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
+
+import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
+import { FirstPersonControls } from 'three/addons/controls/FirstPersonControls.js';
+import { ImprovedNoise } from 'three/addons/math/ImprovedNoise.js';
+import { Sky } from 'three/addons/objects/Sky.js';
 
 let container;
+let camera, controls, scene, renderer;
+let sky, sun;
 
-let camera, scene, renderer;
+const worldWidth = 256, worldDepth = 256;
+const clock = new THREE.Clock();
 
-let pointLight;
+const rainSpeed = 0.01; // Ajustez cette valeur pour contrôler la vitesse de la pluie
 
-// Star textures
-const starAOTexture = new THREE.TextureLoader().load( 'public/starAO.png' );
-starAOTexture.colorSpace = THREE.SRGBColorSpace;
+const rainDropCount = 10000; 
+const rainDropGeometry = new THREE.BufferGeometry(); 
+const rainDropPositions = new Float64Array(rainDropCount * 3); 
 
-const starAlphaTexture = new THREE.TextureLoader().load( 'public/starAlpha.png' );
-starAlphaTexture.colorSpace = THREE.SRGBColorSpace;
+for (let i = 0; i < rainDropCount * 3; i++) {
+    rainDropPositions[i] = (Math.random() - 0.5) * 40;
+}
 
-// Procyon
-const procyonGeometry = new THREE.SphereGeometry( 8, 32, 16 ); 
-const procyonMaterial = new THREE.MeshBasicMaterial({ color: 0xfffffb, alphaMap: starAlphaTexture, aoMap: starAOTexture });
-const procyon = new THREE.Mesh(procyonGeometry, procyonMaterial);
-procyon.position.set(-105, -60, 0);
+rainDropGeometry.setAttribute('position', new THREE.BufferAttribute(rainDropPositions, 3));
 
-// Gomeisa
-const gomeisaGeometry = new THREE.SphereGeometry( 16, 32, 16 ); 
-const gomeisaMaterial = new THREE.MeshBasicMaterial({ color: 0xC1D5FF, alphaMap: starAlphaTexture, aoMap: starAOTexture });
-const gomeisa = new THREE.Mesh(gomeisaGeometry, gomeisaMaterial);
-gomeisa.position.set(105, 60, 0);
+const rainDropMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 0.1 });
 
-// Text etc
-const fontLoader = new FontLoader();
-fontLoader.load(
-  'public/space-mono-regular.json',
-  (monospace) => {
-    const canisMinorGeometry = new TextGeometry('Canis minor', {
-      size: 20,
-      height: 1,
-      font: monospace,
-    });
-    const canisMinorMaterial = new THREE.MeshStandardMaterial({
-      color: 0xffffff,
-      emissive: 'white',
-      emissiveIntensity: 0.3,
-      transparent: true,
-      opacity: 0.2,
-      side: THREE.DoubleSide,
-      envMap: 'reflection',
-      depthTest: false
+const rainDrops = new THREE.Points(rainDropGeometry, rainDropMaterial);
 
-    });
-    const canisMinorMesh = new THREE.Mesh(canisMinorGeometry, canisMinorMaterial);
-    canisMinorMesh.position.set(-80, 40, -300);
-    scene.add(canisMinorMesh);
 
-    const canisMinorSubtitleGeometry = new TextGeometry('71. co do wielkości gwiazdozbiór usytuowany\n w pobliżu równika niebieskiego. Jest jednym \n z 48 pierwotnych greckich gwiazdozbiorów.', {
-      size: 10,
-      height: 1,
-      font: monospace,
-    });
-
-    const canisMinorSubtitleMesh = new THREE.Mesh(canisMinorSubtitleGeometry, canisMinorMaterial);
-    canisMinorSubtitleMesh.position.set(-170, 0, -300);
-    scene.add(canisMinorSubtitleMesh);
-
-    const gomeisaTextGeometry = new TextGeometry('Gomeisa', {
-      size: 6,
-      height: 0.1,
-      font: monospace,
-    });
-    const gomeisaTextMaterial = new THREE.MeshStandardMaterial({
-      color: 0xffffff,
-      emissive: 'slateblue',
-      emissiveIntensity: 1,
-      side: THREE.DoubleSide,
-      envMap: 'reflection',
-      depthTest: false
-
-    });
-    const gomeisaTextMesh = new THREE.Mesh(gomeisaTextGeometry, gomeisaTextMaterial);
-    gomeisaTextMesh.position.set(12, 66, -10);
-
-    scene.add(gomeisaTextMesh);
-
-    const procyonTextGeometry = new TextGeometry('Procyon', {
-      size: 6,
-      height: 0.1,
-      font: monospace,
-    });
-
-    const procyonTextMaterial = new THREE.MeshStandardMaterial({
-      color: 0xffffff,
-      emissive: 'slateblue',
-      emissiveIntensity: 1,
-      side: THREE.DoubleSide,
-      envMap: 'reflection',
-      depthTest: false
-      
-    });
-
-    const procyonTextMesh = new THREE.Mesh(procyonTextGeometry, procyonTextMaterial);
-    procyonTextMesh.position.set(-90, -58, -10);
-
-    scene.add(procyonTextMesh);
-
-    const gomeisaDetailsGeometry = new TextGeometry('Druga pod względem jasności gwiazda\nw gwiazdozbiorze Małego Psa, znajdująca się\nw odległości ok. 162 lat świetlnych od Słońca.', {
-      size: 1.8,
-      height: 0.1,
-      font: monospace,
-    });
-    const detailsMaterial = new THREE.MeshStandardMaterial({
-      color: 0xffffff,
-      emissive: 'slateblue',
-      emissiveIntensity: 1,
-      side: THREE.DoubleSide,
-      envMap: 'reflection',
-      depthTest: false
-
-    });
-    const gomeisaDetailsMesh = new THREE.Mesh(gomeisaDetailsGeometry, detailsMaterial);
-    gomeisaDetailsMesh.position.set(12, 59, -10);
-
-    scene.add(gomeisaDetailsMesh);
-
-    const procyonDetailsGeometry = new TextGeometry('Najjaśniejsza gwiazda w gwiazdozbiorze Małego Psa,\nósma co do jasności gwiazda nocnego nieba. Znajduje się\nw odległości około 11,5 roku świetlnego od Słońca.', {
-      size: 1.8,
-      height: 0.1,
-      font: monospace,
-    });
-
-    const procyonDetailsMesh = new THREE.Mesh(procyonDetailsGeometry, detailsMaterial);
-    procyonDetailsMesh.position.set(-90, -65, -10);
-
-    scene.add(procyonDetailsMesh);
+class FogGUIHelper {
+    constructor(fog) {
+      this.fog = fog;
+    }
+    get near() {
+      return this.fog.near;
+    }
+    set near(v) {
+      this.fog.near = v;
+      this.fog.far = Math.max(this.fog.far, v);
+    }
+    get far() {
+      return this.fog.far;
+    }
+    set far(v) {
+      this.fog.far = v;
+      this.fog.near = Math.min(this.fog.near, v);
+    }
   }
-);
 
 init();
 animate();
+render();
+
+function initSky() {
+
+    // Add Sky
+    sky = new Sky();
+    sky.scale.setScalar( 45000 );
+    scene.add( sky );
+
+    sun = new THREE.Vector3();
+
+    /// GUI
+    const effectController = {
+        turbidity: 10,
+        rayleigh: 0.2,
+        mieCoefficient: 0,
+        mieDirectionalG: 0.27,
+        elevation: 36,
+        azimuth: 180,
+        exposure: 0.1,
+
+    };
+
+
+    function guiChanged() {
+
+        const uniforms = sky.material.uniforms;
+        uniforms[ 'turbidity' ].value = effectController.turbidity;
+        uniforms[ 'rayleigh' ].value = effectController.rayleigh;
+        uniforms[ 'mieCoefficient' ].value = effectController.mieCoefficient;
+        uniforms[ 'mieDirectionalG' ].value = effectController.mieDirectionalG;
+
+        const phi = THREE.MathUtils.degToRad( 90 - effectController.elevation );
+        const theta = THREE.MathUtils.degToRad( effectController.azimuth );
+
+        sun.setFromSphericalCoords( 1, phi, theta );
+
+        uniforms[ 'sunPosition' ].value.copy( sun );
+
+        renderer.toneMappingExposure = effectController.exposure;
+
+        renderer.render( scene, camera );
+
+    }
+
+    const gui = new GUI();
+
+    const near = 10;
+    const far = 1500;
+    const color = 0x263448;
+    scene.fog = new THREE.Fog(color, near, far);
+    scene.background = new THREE.Color(color);
+   
+    const fogGUIHelper = new FogGUIHelper(scene.fog);
+    gui.add(fogGUIHelper, 'near', near, far).listen();
+    gui.add(fogGUIHelper, 'far', near, far).listen();
+
+    const moonFolder = gui.addFolder("Moon")
+    moonFolder.add(effectController, 'elevation', 0, 90, 0.1 ).onChange( guiChanged );
+    moonFolder.add(effectController, 'azimuth', -180, 180, 0.1 ).onChange( guiChanged );
+
+
+    guiChanged();
+
+}
 
 function init() {
 
-  container = document.createElement( 'div' );
-  document.body.appendChild( container );
+    container = document.getElementById( 'container' );
 
-  camera = new THREE.PerspectiveCamera( 60, window.innerWidth / window.innerHeight, 1, 5000 );
-  camera.position.z = 200;
+    camera = new THREE.PerspectiveCamera( 60, window.innerWidth / window.innerHeight, 1, 10000 );
 
-  //cubemap
-  const path = 'public/skybox/';
-  const format = '.png';
-  const urls = [
-    path + 'right' + format, path + 'left' + format,
-    path + 'top' + format, path + 'bottom' + format,
-    path + 'front' + format, path + 'back' + format
-  ];
+    scene = new THREE.Scene();
 
-  const reflectionCube = new THREE.CubeTextureLoader().load( urls );
-  const refractionCube = new THREE.CubeTextureLoader().load( urls );
-  refractionCube.mapping = THREE.CubeRefractionMapping;
+    let mainLight = new THREE.HemisphereLight(0xffffff, 0x70a4cc, 0.9);
+    mainLight.position.set(200, -50, -100);
+    scene.add(mainLight);
+    
+    const shadowLight = new THREE.DirectionalLight(0xFFFFFF, 0.1);
+    shadowLight.position.set(0, 10, 0);
+    shadowLight.target.position.set(-5, 0, 0);
+    shadowLight.castShadow = true;
+    scene.add(shadowLight);
+    scene.add(shadowLight.target);
+    
 
-  scene = new THREE.Scene();
-  scene.background = reflectionCube;
+    const hillsMap = new THREE.CanvasTexture( new generateHillsTexture() );
+    hillsMap.wrapS = THREE.RepeatWrapping;
+    hillsMap.wrapT = THREE.RepeatWrapping;
+    hillsMap.repeat.x = 10;
+    hillsMap.repeat.y = 6;
+    hillsMap.anisotropy = 16;
 
-  //lights
-  const ambient = new THREE.AmbientLight( 0xffffff, 20 );
-  scene.add( ambient );
+    let material = new THREE.MeshPhysicalMaterial( {
+        clearcoat: 0.1,
+        clearcoatRoughness: 1,
+        metalness: 0.1,
+        roughness: 1,
+        color: 0x49a35d,
+        normalMap: hillsMap,
+        normalScale: new THREE.Vector2( 0.4, 0.4 )
+      } );
 
-  pointLight = new THREE.PointLight( 0xffffff, 2 );
-  scene.add( pointLight );
+    const data = generateHeight( worldWidth, worldDepth );  
 
-  //planets
-  scene.add(gomeisa);
-  scene.add(procyon);
+    camera.position.set( 0, 500, 0 );
+    camera.lookAt( 0, 530, - 100 );
 
-  //materials
-  const cubeMaterial3 = new THREE.MeshLambertMaterial( { color: 0xffaa00, envMap: reflectionCube, combine: THREE.MixOperation, reflectivity: 0.3 } );
-  const cubeMaterial2 = new THREE.MeshLambertMaterial( { color: 0xfff700, envMap: refractionCube, refractionRatio: 0.95 } );
-  const cubeMaterial1 = new THREE.MeshLambertMaterial( { color: 0xffffff, envMap: reflectionCube } );
+    const geometry = new THREE.PlaneGeometry( 7500, 7500, worldWidth - 1, worldDepth - 1 );
+      
+    geometry.rotateX( - Math.PI / 2 );
 
-  //renderer
-  renderer = new THREE.WebGLRenderer();
-  renderer.setPixelRatio( window.devicePixelRatio );
-  renderer.setSize( window.innerWidth, window.innerHeight );
-  container.appendChild( renderer.domElement );
+    const vertices = geometry.attributes.position.array;
+  
+    for ( let i = 0, j = 0, l = vertices.length; i < l; i ++, j += 3 ) {
+      vertices[ j + 1 ] = data[ i ] * 8;
+    }
 
-  //controls
-  const controls = new OrbitControls( camera, renderer.domElement );
-  controls.enableZoom = false;
-  controls.enablePan = false;
-  controls.minPolarAngle = Math.PI / 4;
-  controls.maxPolarAngle = Math.PI / 1.5;
+    geometry.computeVertexNormals();
+  
+    let ground = new THREE.Mesh(geometry, material);
+    ground.castShadow = true;
+    ground.receiveShadow = true;
+    
+    scene.add(ground);
+    scene.add(rainDrops);
 
-  window.addEventListener( 'resize', onWindowResize );
+    renderer = new THREE.WebGLRenderer();
+    renderer.setPixelRatio( window.devicePixelRatio );
+    renderer.setSize( window.innerWidth, window.innerHeight );
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 0.95;
+
+    container.appendChild( renderer.domElement );
+
+    controls = new FirstPersonControls( camera, renderer.domElement );
+    controls.movementSpeed = 150;
+    controls.lookSpeed = 0;
+
+    initSky();
+
+    window.addEventListener( 'resize', onWindowResize );
+
 
 }
 
 function onWindowResize() {
 
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
 
-  renderer.setSize( window.innerWidth, window.innerHeight );
+    renderer.setSize( window.innerWidth, window.innerHeight );
 
+    controls.handleResize();
+
+}
+
+function generateHeight( width, height ) {
+
+    let seed = Math.PI / 4;
+    window.Math.random = function () {
+
+        const x = Math.sin( seed ++ ) * 10000;
+        return x - Math.floor( x );
+
+    };
+
+    const size = width * height, data = new Uint32Array( size );
+    const perlin = new ImprovedNoise(), z = Math.random() * 100;
+
+    let quality = 1;
+
+    for ( let j = 0; j < 4; j ++ ) {
+
+        for ( let i = 0; i < size; i ++ ) {
+
+            const x = i % width, y = ~ ~ ( i / width );
+            data[ i ] += Math.abs( perlin.noise( x / quality, y / quality, z ) * quality * 1.75 );
+
+        }
+
+        quality *= 5;
+
+    }
+
+    return data;
+
+}
+
+function generateHillsTexture() {
+
+    const canvas = document.createElement( 'canvas' );
+    const width = 7500;
+    const height = 7500;
+    canvas.width = width;
+    canvas.height = height;
+
+    const context = canvas.getContext( '2d' );
+    context.fillStyle = 'rgb(127,127,255)';
+    context.fillRect( 0, 0, width, height );
+
+    for ( let i = 0; i < 4000; i ++ ) {
+
+        const x = Math.random() * width;
+        const y = Math.random() * height;
+        const r = Math.random() * 3 + 3;
+
+        let nx = Math.random() * 2 - 1;
+        let ny = Math.random() * 2 - 1;
+        let nz = 1.5;
+
+        const l = Math.sqrt( nx * nx + ny * ny + nz * nz );
+
+        nx /= l; ny /= l; nz /= l;
+
+        context.fillStyle = 'rgb(' + ( nx * 127 + 127 ) + ',' + ( ny * 127 + 127 ) + ',' + ( nz * 255 ) + ')';
+        context.beginPath();
+        context.arc( x, y, r, 0, Math.PI * 2 );
+        context.fill();
+
+    }
+
+    return canvas;
 }
 
 function animate() {
 
-  requestAnimationFrame( animate );
-  render();
+    requestAnimationFrame(animate); // Demander une nouvelle animation
 
 }
 
 function render() {
 
-  renderer.render( scene, camera );
+    requestAnimationFrame( render );
+  
+    // Faire tomber les gouttes de pluie
+    const positions = rainDrops.geometry.attributes.position.array; // Récupérer les positions des gouttes de pluie
+
+    // Parcourir les positions des gouttes de pluie et mettre à jour leur position en Y (hauteur)
+    for (let i = 1; i < rainDropCount * 3; i += 3) {
+        positions[i] -= rainSpeed; // Faire descendre la goutte de pluie en fonction de la vitesse définie
+    
+        // Si la goutte de pluie est tombée en dessous de la limite inférieure, la remettre en haut
+        if (positions[i] < -50) {
+            positions[i] = 600;
+        }
+    }
+
+    // Indiquer que les positions des gouttes de pluie ont été mises à jour
+    rainDrops.geometry.attributes.position.needsUpdate = true;
+
+    controls.update( clock.getDelta() );
+
+    // Rendre la scène avec la caméra
+    renderer.render( scene, camera );
+
 
 }

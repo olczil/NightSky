@@ -1,27 +1,166 @@
 import * as THREE from 'three';
 
+import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 import { FirstPersonControls } from 'three/addons/controls/FirstPersonControls.js';
 import { ImprovedNoise } from 'three/addons/math/ImprovedNoise.js';
+import { Sky } from 'three/addons/objects/Sky.js';
 
 let container;
-let camera, controls, scene, renderer;
-let mesh, texture;
+let camera, controls, scene, renderer, parameters;
+let sky, sun;
 
 const worldWidth = 256, worldDepth = 256;
 const clock = new THREE.Clock();
+const materials = [];
 
+class FogGUIHelper {
+    constructor(fog) {
+      this.fog = fog;
+    }
+    get near() {
+      return this.fog.near;
+    }
+    set near(v) {
+      this.fog.near = v;
+      this.fog.far = Math.max(this.fog.far, v);
+    }
+    get far() {
+      return this.fog.far;
+    }
+    set far(v) {
+      this.fog.far = v;
+      this.fog.near = Math.min(this.fog.near, v);
+    }
+  }
 
 init();
 animate();
+// render();
+
+function initParticles() {
+
+    const geometry = new THREE.BufferGeometry();
+    const vertices = [];
+
+    const textureLoader = new THREE.TextureLoader();
+
+    const assignSRGB = ( texture ) => { texture.colorSpace = THREE.SRGBColorSpace; };
+
+    const sprite1 = textureLoader.load( 'public/snowflake4.png', assignSRGB );
+    const sprite2 = textureLoader.load( 'public/snowflake4.png', assignSRGB );
+    const sprite3 = textureLoader.load( 'public/snowflake4.png', assignSRGB );
+    const sprite4 = textureLoader.load( 'public/snowflake4.png', assignSRGB );
+    const sprite5 = textureLoader.load( 'public/snowflake4.png', assignSRGB );
+
+    for ( let i = 0; i < 1000; i ++ ) {
+
+        const x = Math.random() * 2000 - 1000;
+        const y = Math.random() * 2000 - 1000;
+        const z = Math.random() * 2000 - 1000;
+
+        vertices.push( x, y, z );
+
+    }
+
+    geometry.setAttribute( 'position', new THREE.Float32BufferAttribute( vertices, 3 ) );
+
+    parameters = [
+        [[ 1.0, 0.2, 0.5 ], sprite2, 20 ],
+        [[ 0.95, 0.1, 0.5 ], sprite3, 15 ],
+        [[ 0.90, 0.05, 0.5 ], sprite1, 10 ],
+        [[ 0.85, 0, 0.5 ], sprite5, 8 ],
+        [[ 0.80, 0, 0.5 ], sprite4, 5 ]
+    ];
+
+    for ( let i = 0; i < parameters.length; i ++ ) {
+
+        const color = parameters[ i ][ 0 ];
+        const sprite = parameters[ i ][ 1 ];
+        const size = parameters[ i ][ 2 ];
+
+        materials[ i ] = new THREE.PointsMaterial( { size: size, map: sprite, blending: THREE.AdditiveBlending, depthTest: true, transparent: true } );
+        materials[ i ].color.setHSL( color[ 0 ], color[ 1 ], color[ 2 ], THREE.SRGBColorSpace );
+
+        const particles = new THREE.Points( geometry, materials[ i ] );
+
+        particles.rotation.x = Math.random() * 6;
+        particles.rotation.y = Math.random() * 6;
+        particles.rotation.z = Math.random() * 6;
+
+        scene.add( particles );
+
+    }
+
+}
+
+function initSky() {
+
+    // Add Sky
+    sky = new Sky();
+    sky.scale.setScalar( 45000 );
+    scene.add( sky );
+
+    sun = new THREE.Vector3();
+
+    /// GUI
+    const effectController = {
+        turbidity: 10,
+        rayleigh: 0.2,
+        mieCoefficient: 0,
+        mieDirectionalG: 0.27,
+        elevation: 36,
+        azimuth: 180,
+        exposure: 0.1,
+
+    };
+
+
+    function guiChanged() {
+
+        const uniforms = sky.material.uniforms;
+        uniforms[ 'turbidity' ].value = effectController.turbidity;
+        uniforms[ 'rayleigh' ].value = effectController.rayleigh;
+        uniforms[ 'mieCoefficient' ].value = effectController.mieCoefficient;
+        uniforms[ 'mieDirectionalG' ].value = effectController.mieDirectionalG;
+
+        const phi = THREE.MathUtils.degToRad( 90 - effectController.elevation );
+        const theta = THREE.MathUtils.degToRad( effectController.azimuth );
+
+        sun.setFromSphericalCoords( 1, phi, theta );
+
+        uniforms[ 'sunPosition' ].value.copy( sun );
+
+        renderer.toneMappingExposure = effectController.exposure;
+
+        renderer.render( scene, camera );
+
+    }
+
+    const gui = new GUI();
+
+    const near = 10;
+    const far = 1500;
+    const color = 0x263448;
+    scene.fog = new THREE.Fog(color, near, far);
+    scene.background = new THREE.Color(color);
+   
+    const fogGUIHelper = new FogGUIHelper(scene.fog);
+    gui.add(fogGUIHelper, 'near', near, far).listen();
+    gui.add(fogGUIHelper, 'far', near, far).listen();
+
+    const moonFolder = gui.addFolder("Moon")
+    moonFolder.add(effectController, 'elevation', 0, 90, 0.1 ).onChange( guiChanged );
+    moonFolder.add(effectController, 'azimuth', -180, 180, 0.1 ).onChange( guiChanged );
+
+    guiChanged();
+
+}
 
 function init() {
 
     container = document.getElementById( 'container' );
-
     camera = new THREE.PerspectiveCamera( 60, window.innerWidth / window.innerHeight, 1, 10000 );
-
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x70a4cc);
 
     let mainLight = new THREE.HemisphereLight(0xffffff, 0x70a4cc, 0.9);
     mainLight.position.set(200, -50, -100);
@@ -34,8 +173,6 @@ function init() {
     scene.add(shadowLight);
     scene.add(shadowLight.target);
     
-    // Add Scene Fog
-    scene.fog = new THREE.FogExp2( 0x70a4cc, 0.0002 );
 
     const hillsMap = new THREE.CanvasTexture( new generateHillsTexture() );
     hillsMap.wrapS = THREE.RepeatWrapping;
@@ -76,7 +213,7 @@ function init() {
     ground.receiveShadow = true;
     
     scene.add(ground);
-
+    initParticles();
 
     renderer = new THREE.WebGLRenderer();
     renderer.setPixelRatio( window.devicePixelRatio );
@@ -90,10 +227,12 @@ function init() {
     controls.movementSpeed = 150;
     controls.lookSpeed = 0;
 
+    initSky();
+
     window.addEventListener( 'resize', onWindowResize );
 
-}
 
+}
 
 function onWindowResize() {
 
@@ -176,15 +315,42 @@ function generateHillsTexture() {
 
 function animate() {
 
-    requestAnimationFrame( animate );
+    requestAnimationFrame(animate); 
     render();
 
 }
 
-
 function render() {
 
+    requestAnimationFrame( render );
+  
     controls.update( clock.getDelta() );
+
+    const time = Date.now() * 0.00005;
+
+
+    for ( let i = 0; i < scene.children.length; i ++ ) {
+
+        const object = scene.children[ i ];
+
+        if ( object instanceof THREE.Points ) {
+
+            object.rotation.x = time * ( i < 4 ? i + 1 : - ( i + 1 ) );
+
+        }
+
+    }
+
+    for ( let i = 0; i < materials.length; i ++ ) {
+
+        const color = parameters[ i ][ 0 ];
+
+        const h = ( 30 * ( color[ 0 ] + time ));
+        materials[ i ].color.setHSL( h, color[ 1 ], color[ 2 ], THREE.SRGBColorSpace );
+    }
+
+
     renderer.render( scene, camera );
+
 
 }
