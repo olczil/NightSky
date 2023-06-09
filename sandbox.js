@@ -4,18 +4,88 @@ import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 import { FirstPersonControls } from 'three/addons/controls/FirstPersonControls.js';
 import { ImprovedNoise } from 'three/addons/math/ImprovedNoise.js';
 import { Sky } from 'three/addons/objects/Sky.js';
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+
+function exportGLTF( input ) {
+
+    const gltfExporter = new GLTFExporter();
+
+    const options = {
+
+        trs: params.trs,
+        onlyVisible: params.onlyVisible,
+        binary: params.binary,
+        maxTextureSize: params.maxTextureSize
+
+    };
+
+    gltfExporter.parse(
+        input,
+        function ( result ) {
+
+            if ( result instanceof ArrayBuffer ) {
+                saveArrayBuffer( result, 'scene.glb' );
+            } 
+            
+            else {
+                const output = JSON.stringify( result, null, 2 );
+                console.log( output );
+                saveString( output, 'scene.gltf' );
+            }
+        },
+
+        function ( error ) {
+            console.log( 'An error happened during parsing', error );
+        },
+
+        options
+    );
+}
+
+const link = document.createElement( 'a' );
+link.style.display = 'none';
+document.body.appendChild( link ); // Firefox workaround, see #6594
+
+function save( blob, filename ) {
+
+    link.href = URL.createObjectURL( blob );
+    link.download = filename;
+    link.click();
+
+    // URL.revokeObjectURL( url ); breaks Firefox...
+
+}
+
+function saveString( text, filename ) {
+
+    save( new Blob( [ text ], { type: 'text/plain' } ), filename );
+
+}
+
+
+function saveArrayBuffer( buffer, filename ) {
+
+    save( new Blob( [ buffer ], { type: 'application/octet-stream' } ), filename );
+
+}
 
 let container;
-let camera, controls, scene, renderer, parameters;
+let camera, controls, scene, renderer;
 let sky, sun;
+let rainMaterial, rainColor, rainSize, rainDensity = 10000;
+const rainVertices = [];
+const starGeometry = new THREE.SphereGeometry(40, 40, 40);
+
+const params = {
+    trs: false,
+    onlyVisible: true,
+    binary: false,
+    maxTextureSize: 4096,
+    exportScene: exportScene
+};
 
 const worldWidth = 256, worldDepth = 256;
 const clock = new THREE.Clock();
-let rainMaterial;
-let rainColor;
-let rainSize;
-let rainDensity = 10000;
-const rainVertices = [];
 
 class FogGUIHelper {
     constructor(fog) {
@@ -40,6 +110,58 @@ class FogGUIHelper {
 init();
 animate();
 // render();
+
+function stars() {
+
+const starMaterial1 = new THREE.MeshStandardMaterial({color: 0xffffff});
+const star1 = new THREE.Mesh(starGeometry, starMaterial1)
+star1.position.set(4000, 5000, -5600);
+star1.layers.set(2);
+star1.name = "star1";
+
+scene.add(star1);
+
+const starMaterial2 = new THREE.MeshStandardMaterial({color: 0xffffff});
+const star2 = new THREE.Mesh(starGeometry, starMaterial2)
+star2.position.set(900, 4500, -5600);
+star2.layers.set(3);
+star2.name = "star2";
+
+scene.add(star2);
+
+const starMaterial3 = new THREE.MeshStandardMaterial({color: 0xffffff});
+const star3 = new THREE.Mesh(starGeometry, starMaterial3)
+star3.position.set(2000, 5500, -5600);
+star3.layers.set(4);
+star3.name = "star3";
+
+scene.add(star3);
+
+const starMaterial4 = new THREE.MeshStandardMaterial({color: 0xffffff});
+const star4 = new THREE.Mesh(starGeometry, starMaterial4)
+star4.position.set(-2900, 5600, -5600);
+star4.layers.set(5);
+star4.name = "star4";
+
+scene.add(star4);
+
+const starMaterial5 = new THREE.MeshStandardMaterial({color: 0xffffff});
+const star5 = new THREE.Mesh(starGeometry, starMaterial5)
+star5.position.set(-4000, 4600, -5600);
+star5.layers.set(6);
+star5.name = "star5";
+
+scene.add(star5);
+
+const starMaterial6 = new THREE.MeshStandardMaterial({color: 0xffffff});
+const star6 = new THREE.Mesh(starGeometry, starMaterial6)
+star6.position.set(-6000, 6000, -5600);
+star6.layers.set(7);
+star6.name = "star6";
+
+scene.add(star6);
+
+}
 
 function initParticles() {
 
@@ -76,17 +198,18 @@ function initParticles() {
     particles.rotation.z = Math.random() * 6;
 
     particles.layers.set(1);
+    particles.name = "particles"
 
     scene.add( particles );
 
 }
 
 function initSky() {
-
     // Add Sky
     sky = new Sky();
     sky.scale.setScalar( 45000 );
     sky.layers.set(0);
+    sky.name = "sky";
     scene.add( sky );
 
     sun = new THREE.Vector3();
@@ -130,7 +253,9 @@ function initSky() {
     const far = 1500;
     const color = 0x263448;
     scene.fog = new THREE.Fog(color, near, far);
+    scene.fog.name = "fog";
     scene.background = new THREE.Color(color);
+    scene.background.name = "background";
    
     const fogGUIHelper = new FogGUIHelper(scene.fog);
     gui.add(fogGUIHelper, 'near', near, far).listen();
@@ -143,6 +268,17 @@ function initSky() {
     const rainFolder = gui.addFolder("Rain");
     rainFolder.add({'toggle': function() { camera.layers.toggle(1) }}, 'toggle');
 
+    const starsFolder = gui.addFolder("Stars");
+    starsFolder.add({'toggle': function() { camera.layers.toggle(2) }}, 'toggle');
+    starsFolder.add({'toggle': function() { camera.layers.toggle(3) }}, 'toggle');
+    starsFolder.add({'toggle': function() { camera.layers.toggle(4) }}, 'toggle');
+    starsFolder.add({'toggle': function() { camera.layers.toggle(5) }}, 'toggle');
+    starsFolder.add({'toggle': function() { camera.layers.toggle(6) }}, 'toggle');
+    starsFolder.add({'toggle': function() { camera.layers.toggle(7) }}, 'toggle');
+
+    const saveFolder = gui.addFolder("Export NightSky");
+    saveFolder.add(params, 'exportScene').name('Export your NightSky');
+
     guiChanged();
 
 }
@@ -150,14 +286,18 @@ function initSky() {
 function init() {
 
     container = document.getElementById( 'container' );
+
     camera = new THREE.PerspectiveCamera( 60, window.innerWidth / window.innerHeight, 1, 10000 );
     camera.layers.enable(0);
-    // camera.layers.enable(1);
+    camera.name = "perspectiveCamera";
+
     scene = new THREE.Scene();
+    scene.name = "NightSky"
 
     let mainLight = new THREE.HemisphereLight(0xffffff, 0x70a4cc, 0.9);
     mainLight.layers.enable(0);
     mainLight.position.set(200, -50, -100);
+    mainLight.name = "mainLight";
     scene.add(mainLight);
     
     const shadowLight = new THREE.DirectionalLight(0xFFFFFF, 0.1);
@@ -165,6 +305,7 @@ function init() {
     shadowLight.position.set(0, 10, 0);
     shadowLight.target.position.set(-5, 0, 0);
     shadowLight.castShadow = true;
+    shadowLight.name = "shadowLight";
     scene.add(shadowLight);
     scene.add(shadowLight.target);
     
@@ -175,6 +316,7 @@ function init() {
     hillsMap.repeat.x = 10;
     hillsMap.repeat.y = 6;
     hillsMap.anisotropy = 16;
+
 
     let material = new THREE.MeshPhysicalMaterial( {
         clearcoat: 0.1,
@@ -207,9 +349,11 @@ function init() {
     ground.castShadow = true;
     ground.receiveShadow = true;
     ground.layers.set(0);
+    ground.name = "ground";
     
     scene.add(ground);
     initParticles();
+    stars();
 
     renderer = new THREE.WebGLRenderer();
     renderer.setPixelRatio( window.devicePixelRatio );
@@ -227,6 +371,12 @@ function init() {
 
     window.addEventListener( 'resize', onWindowResize );
 
+
+}
+
+function exportScene() {
+
+    exportGLTF( scene );
 
 }
 
